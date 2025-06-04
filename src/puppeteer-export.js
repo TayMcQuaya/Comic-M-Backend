@@ -190,6 +190,17 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
 
     console.log(`[Puppeteer] Navigating to URL: ${comicCreatorUrl}`);
     
+    // Add initial delay before navigation
+    await page.waitForTimeout(1000);
+
+    // Set up page load handlers before navigation
+    await page.evaluateOnNewDocument(() => {
+      window.onbeforeunload = null;
+      window.IS_PUPPETEER_EXPORT = true;
+      console.log('[Pre-Navigation] Set IS_PUPPETEER_EXPORT flag');
+    });
+
+    // Navigate with more robust wait conditions
     const response = await page.goto(comicCreatorUrl, { 
       waitUntil: ['networkidle0', 'domcontentloaded', 'load'],
       timeout: 60000
@@ -199,22 +210,38 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
       throw new Error(`Failed to load page: ${response.status()} ${response.statusText()}`);
     }
 
-    console.log(`[Puppeteer] Navigation complete. Waiting for comic canvas...`);
+    console.log(`[Puppeteer] Navigation complete. Adding initial delay...`);
+    await page.waitForTimeout(2000); // Add post-navigation delay
+
+    console.log(`[Puppeteer] Waiting for comic canvas...`);
 
     // Wait for the comic canvas with extended timeout and visibility check
     try {
-      console.log('[Puppeteer] Attempting simple waitForFunction for document.readyState...');
-      await page.waitForFunction(() => document.readyState === 'complete', { timeout: 10000 }); // Shorter timeout for this test
-      console.log('[Puppeteer] document.readyState is complete.');
-
-      console.log('[Puppeteer] Now attempting original waitForFunction for #comic-canvas...');
+      // First ensure the page is fully loaded
+      console.log('[Puppeteer] Waiting for full page load...');
+      await page.waitForFunction(() => {
+        return document.readyState === 'complete' && 
+               typeof window.comicCreator !== 'undefined' &&
+               window.IS_PUPPETEER_EXPORT === true;
+      }, { timeout: 30000 });
+      
+      console.log('[Puppeteer] Page fully loaded, now waiting for comic canvas...');
+      
+      // Then wait for the canvas
       await page.waitForFunction(() => {
         const canvas = document.querySelector('#comic-canvas');
-        // Add more logging inside this function if it still fails
-        if (!canvas) console.log('[Page Eval] #comic-canvas not found yet.');
-        else if (window.getComputedStyle(canvas).display === 'none') console.log('[Page Eval] #comic-canvas found but display is none.');
-        return canvas && window.getComputedStyle(canvas).display !== 'none';
+        if (!canvas) {
+          console.log('[Page Eval] #comic-canvas not found yet.');
+          return false;
+        }
+        const style = window.getComputedStyle(canvas);
+        if (style.display === 'none') {
+          console.log('[Page Eval] #comic-canvas found but display is none.');
+          return false;
+        }
+        return true;
       }, { timeout: 60000 });
+      
       console.log('[Puppeteer] Successfully found #comic-canvas.');
 
     } catch (error) {

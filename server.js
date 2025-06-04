@@ -26,9 +26,6 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Trust proxy for DigitalOcean App Platform
-app.set('trust proxy', 1);
-
 // CORS configuration
 const corsOptions = {
     origin: function (origin, callback) {
@@ -39,7 +36,7 @@ const corsOptions = {
         const allowedOrigins = [
             'http://localhost:5173',           // Local development
             'http://localhost:3000',           // Alternative local port
-            'https://your-comic-app.vercel.app', // Production Vercel URL (replace with actual)
+            'https://comic-pro.vercel.app',    // Your actual Vercel production URL
             /\.vercel\.app$/,                  // Any Vercel deployment
             /localhost:\d+/                    // Any localhost port
         ];

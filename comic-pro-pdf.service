@@ -1,0 +1,20 @@
+[Unit]
+Description=Comic-Pro PDF Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/home/ubuntu/comic-pro-pdf-service
+Environment=NODE_ENV=production
+Environment=PORT=3001
+EnvironmentFile=/home/ubuntu/comic-pro-pdf-service/.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=comic-pro-pdf
+
+[Install]
+WantedBy=multi-user.target 

@@ -7,6 +7,12 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "prod": "NODE_ENV=production node server.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop comic-pro-pdf-service",
+    "pm2:restart": "pm2 restart comic-pro-pdf-service",
+    "pm2:delete": "pm2 delete comic-pro-pdf-service",
+    "pm2:logs": "pm2 logs comic-pro-pdf-service",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {
@@ -17,7 +23,8 @@
     "fs-extra": "^11.3.0",
     "pdf-lib": "^1.17.1",
     "puppeteer": "^22.15.0",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "pm2": "^5.3.0"
   },
   "engines": {
     "node": ">=18.0.0"

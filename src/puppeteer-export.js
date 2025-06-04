@@ -90,29 +90,54 @@ function createSinglePageProjectState(fullProjectState, pageIndexToExport) {
 async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState, outputPdfPath) { // Added outputPdfPath
   console.log(`[Puppeteer] Launching browser for output: ${outputPdfPath}`);
   
-  // Use the Chrome installed in Docker container
-  
+  // Configure browser for Ubuntu Droplet environment
   console.log('Environment details:', {
-    PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH,
-    NODE_ENV: process.env.NODE_ENV
+    NODE_ENV: process.env.NODE_ENV,
+    PLATFORM: process.platform,
+    PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH
   });
+
+  // Determine Chrome executable path for Ubuntu
+  const chromeExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH || 
+    '/usr/bin/google-chrome' || 
+    '/usr/bin/google-chrome-stable' || 
+    '/usr/bin/chromium-browser';
+
+  console.log(`[Puppeteer] Using Chrome executable: ${chromeExecutablePath}`);
 
   const browser = await puppeteer.launch({
     headless: "new", // Use the new headless mode
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+    executablePath: chromeExecutablePath, // Use system Chrome on Ubuntu
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage', // Critical for containerized environments
+      '--disable-dev-shm-usage',
       '--disable-gpu',
       '--disable-extensions',
       '--disable-software-rasterizer',
-      '--window-size=1280,800'
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-features=TranslateUI',
+      '--disable-component-extensions-with-background-pages',
+      '--no-default-browser-check',
+      '--no-first-run',
+      '--disable-default-apps',
+      '--disable-popup-blocking',
+      '--disable-translate',
+      '--disable-background-networking',
+      '--disable-sync',
+      '--metrics-recording-only',
+      '--no-report-upload',
+      '--disable-crash-reporter',
+      '--window-size=1280,800',
+      '--virtual-time-budget=30000' // Give extra time for complex renders
     ],
     defaultViewport: {
       width: 1280,
       height: 800
-    }
+    },
+    timeout: 60000 // Extended timeout for browser launch
   });
 
   let page;

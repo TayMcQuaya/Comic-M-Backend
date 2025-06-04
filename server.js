@@ -28,7 +28,13 @@ const PORT = process.env.PORT || 3001;
 
 // CORS configuration
 const corsOptions = {
-    origin: ['https://comic-pro.vercel.app', 'http://localhost:5173', 'http://localhost:3000'],
+    origin: [
+        'https://comic-pro.vercel.app', 
+        'http://localhost:5173', 
+        'http://localhost:3000',
+        // Add your friend's specific origin if they are testing from a different one
+        // or ensure your Vercel deployment URL is correctly whitelisted if that's what they use.
+    ],
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

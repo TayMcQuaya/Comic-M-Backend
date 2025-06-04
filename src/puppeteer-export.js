@@ -90,8 +90,7 @@ function createSinglePageProjectState(fullProjectState, pageIndexToExport) {
 async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState, outputPdfPath) { // Added outputPdfPath
   console.log(`[Puppeteer] Launching browser for output: ${outputPdfPath}`);
   
-  // Production-ready launch options for DigitalOcean App Platform
-  // Let Puppeteer use the Chrome it downloaded during install
+  // Use the Chrome installed in Docker container
   
   console.log('Environment details:', {
     PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -100,7 +99,7 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
 
   const browser = await puppeteer.launch({
     headless: "new", // Use the new headless mode
-    // Don't set executablePath - let Puppeteer find the Chrome it installed
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -108,8 +107,7 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
       '--disable-gpu',
       '--disable-extensions',
       '--disable-software-rasterizer',
-      '--window-size=1280,800',
-      '--user-agent=ComicPro/1.0 (+https://github.com/your-repo/comic-pro) Chromium/120.0.0.0'
+      '--window-size=1280,800'
     ],
     defaultViewport: {
       width: 1280,

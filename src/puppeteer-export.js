@@ -248,7 +248,7 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
     page.on('pageerror', err => console.error('[Page Error]', err));
 
     // Add initial delay before navigation
-    await page.waitForDelay(2000);
+    await new Promise(resolve => setTimeout(resolve, 2000));
     console.log(`[Puppeteer] Starting navigation to: ${comicCreatorUrl}`);
 
     // Navigate with robust wait conditions
@@ -263,7 +263,7 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
 
     // Add post-navigation delay
     console.log(`[Puppeteer] Navigation complete. Waiting for page stabilization...`);
-    await page.waitForDelay(3000);
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     console.log(`[Puppeteer] Waiting for comic canvas...`);
 
@@ -466,7 +466,7 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
     console.log('[Puppeteer] Project state loaded successfully. Waiting for any final rendering...');
     
     // Add delay for rendering to complete after state loading
-    await page.waitForDelay(1000);
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Instead of specific elements, let's wait for images to be loaded if that's a concern
     console.log('[Puppeteer] Waiting for images to load on the page (if any)...');
@@ -484,7 +484,7 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
     console.log('[Puppeteer] All images on page considered loaded or timed out.');
 
     // Wait for a short fixed time after image loading to allow final rendering tweaks
-    await page.waitForDelay(1500); // Adjusted timing for final rendering
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Adjusted timing for final rendering
     console.log('[Puppeteer] Final rendering delay complete.');
 
     console.log('[Puppeteer] About to get boundingBox. Checking canvas computed styles...');

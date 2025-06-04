@@ -1,0 +1,34 @@
+{
+  "name": "comic-pro-pdf-service",
+  "version": "1.0.0",
+  "description": "Standalone PDF export service for Comic-Pro using Puppeteer",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "dependencies": {
+    "@ilovepdf/ilovepdf-nodejs": "^0.3.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "fs-extra": "^11.3.0",
+    "pdf-lib": "^1.17.1",
+    "puppeteer": "^22.15.0",
+    "uuid": "^11.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "pdf",
+    "puppeteer",
+    "comic",
+    "export",
+    "express"
+  ],
+  "author": "Comic-Pro",
+  "license": "MIT"
+} 

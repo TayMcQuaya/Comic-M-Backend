@@ -99,9 +99,19 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
 
   // Determine Chrome executable path for Ubuntu
   const chromeExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH || 
-    '/usr/bin/google-chrome' || 
     '/usr/bin/google-chrome-stable' || 
+    '/usr/bin/google-chrome' || 
+    '/usr/bin/chromium' ||
     '/usr/bin/chromium-browser';
+
+  // Verify Chrome exists
+  try {
+    await fs.access(chromeExecutablePath);
+    console.log(`[Puppeteer] Verified Chrome exists at: ${chromeExecutablePath}`);
+  } catch (error) {
+    console.error(`[Puppeteer] Chrome not found at ${chromeExecutablePath}. Error:`, error);
+    throw new Error(`Chrome not found at ${chromeExecutablePath}. Please install Chrome/Chromium.`);
+  }
 
   console.log(`[Puppeteer] Using Chrome executable: ${chromeExecutablePath}`);
 

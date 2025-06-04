@@ -37,8 +37,10 @@ const corsOptions = {
             'http://localhost:5173',           // Local development
             'http://localhost:3000',           // Alternative local port
             'https://comic-pro.vercel.app',    // Your actual Vercel production URL
+            'https://comic-8hwgnwhan-taymcquayas-projects.vercel.app', // Your new Vercel URL
             /\.vercel\.app$/,                  // Any Vercel deployment
-            /localhost:\d+/                    // Any localhost port
+            /localhost:\d+/,                   // Any localhost port
+            'https://comic-pro.vercel.app'     // Your main Vercel URL
         ];
         
         // Check if origin is allowed

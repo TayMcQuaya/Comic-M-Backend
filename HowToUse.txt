@@ -1,0 +1,42 @@
+# SSH into droplet
+ssh root@YOUR_DROPLET_IP
+
+# Upload your code (choose one method):
+
+# Method 1: Git (Recommended)
+git clone https://github.com/yourusername/your-repo.git
+cd your-repo/comic-pro-pdf-service-deploy
+
+# Method 2: Manual upload with SCP
+scp -r comic-pro-pdf-service-deploy/ root@YOUR_DROPLET_IP:~/
+
+# Run automated deployment
+chmod +x deploy.sh
+./deploy.sh
+
+# Configure environment
+cp env.example .env
+nano .env
+
+
+THEN .env content: 
+NODE_ENV=production
+PORT=3001
+COMIC_CREATOR_URL=https://your-comic-app.vercel.app
+ILOVEPDF_PUBLIC_KEY=your_key_here
+ILOVEPDF_SECRET_KEY=your_secret_here
+EXPORT_OUTPUT_DIR=./exports
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+
+# Start the service
+npm run pm2:start
+
+# Verify it's working
+curl http://localhost:3001/health
+
+update your frontend URL:
+const PROD_API_BASE_URL = 'http://YOUR_DROPLET_IP:3001/api';
+then for frontend NOT backend:
+# In your main Comic-Pro directory
+npm run build
+vercel deploy --prod

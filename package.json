@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "postinstall": "npx puppeteer browsers install chrome",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {

@@ -102,18 +102,25 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
   //   userDataDir: path.join(__dirname, '..', '..', 'puppeteer_cache') 
   // });
   
-  // Simplified launch options for potentially more stability during chunked processing
+  // Production-ready launch options for DigitalOcean App Platform
   const browser = await puppeteer.launch({
     headless: "new", // Use the new headless mode
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage', // Often helps in CI/limited resource environments
+      '--disable-gpu',
+      '--disable-dev-tools',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process', // Critical for containerized environments
       '--font-render-hinting=none',
       '--force-color-profile=srgb'
     ],
-    // Consider removing userDataDir if it's causing EBUSY errors, or ensure unique dirs per browser instance
-    // userDataDir: path.join(os.tmpdir(), `puppeteer_dev_chrome_profile_${Date.now()}`) // Example for unique dir
+    // For DigitalOcean App Platform - automatically download Chrome if not found
+    downloadBaseUrl: process.env.PUPPETEER_DOWNLOAD_BASE_URL,
+    skipChromiumDownload: false,
+    ignoreHTTPSErrors: true
   });
 
   let page;

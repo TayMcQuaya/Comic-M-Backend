@@ -89,70 +89,32 @@ function createSinglePageProjectState(fullProjectState, pageIndexToExport) {
 
 async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState, outputPdfPath) { // Added outputPdfPath
   console.log(`[Puppeteer] Launching browser for output: ${outputPdfPath}`);
-  // const browser = await puppeteer.launch({ // Previous launch options
-  //   headless: false, 
-  //   devtools: true,  
-  //   args: [
-  //     '--no-sandbox',
-  //     '--disable-setuid-sandbox',
-  //     '--disable-web-security', 
-  //     '--font-render-hinting=none', 
-  //     '--force-color-profile=srgb' 
-  //   ],
-  //   userDataDir: path.join(__dirname, '..', '..', 'puppeteer_cache') 
-  // });
   
   // Production-ready launch options for DigitalOcean App Platform
-  let executablePath;
+  // Based on official DigitalOcean tutorial: https://www.digitalocean.com/community/tutorials/build-a-puppeteer-web-scrapper-with-docker-and-app-platform
   
-  // Try to find Chrome executable in common DigitalOcean locations
-  if (process.env.NODE_ENV === 'production') {
-    const possiblePaths = [
-      process.env.PUPPETEER_EXECUTABLE_PATH,
-      '/usr/bin/google-chrome',
-      '/usr/bin/google-chrome-stable',
-      '/usr/bin/chromium',
-      '/usr/bin/chromium-browser',
-      '/opt/google/chrome/chrome'
-    ];
-    
-    for (const chromePath of possiblePaths) {
-      if (chromePath && await fs.pathExists(chromePath)) {
-        executablePath = chromePath;
-        console.log(`[Puppeteer] Found Chrome at: ${chromePath}`);
-        break;
-      }
-    }
-    
-    if (!executablePath) {
-      console.log('[Puppeteer] Chrome not found, attempting to install...');
-      try {
-        const { execSync } = await import('child_process');
-        execSync('npx puppeteer browsers install chrome', { stdio: 'inherit' });
-        console.log('[Puppeteer] Chrome installation completed');
-      } catch (installError) {
-        console.error('[Puppeteer] Chrome installation failed:', installError);
-      }
-    }
-  }
+  console.log('Environment details:', {
+    PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH,
+    NODE_ENV: process.env.NODE_ENV
+  });
 
   const browser = await puppeteer.launch({
     headless: "new", // Use the new headless mode
-    executablePath: executablePath, // Use found Chrome path in production
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage', // Often helps in CI/limited resource environments
+      '--disable-dev-shm-usage', // Critical for containerized environments
       '--disable-gpu',
-      '--disable-dev-tools',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process', // Critical for containerized environments
-      '--font-render-hinting=none',
-      '--force-color-profile=srgb'
+      '--disable-extensions',
+      '--disable-software-rasterizer',
+      '--window-size=1280,800',
+      '--user-agent=ComicPro/1.0 (+https://github.com/your-repo/comic-pro) Chromium/120.0.0.0'
     ],
-    // For DigitalOcean App Platform - automatically download Chrome if not found
-    ignoreHTTPSErrors: true
+    defaultViewport: {
+      width: 1280,
+      height: 800
+    }
   });
 
   let page;

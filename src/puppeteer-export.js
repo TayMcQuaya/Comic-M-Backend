@@ -116,8 +116,8 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
   console.log(`[Puppeteer] Using Chrome executable: ${chromeExecutablePath}`);
 
   const browser = await puppeteer.launch({
-    headless: "new", // Use the new headless mode
-    executablePath: chromeExecutablePath, // Use system Chrome on Ubuntu
+    headless: "new",
+    executablePath: chromeExecutablePath,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -141,66 +141,55 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
       '--no-report-upload',
       '--disable-crash-reporter',
       '--window-size=1280,800',
-      '--virtual-time-budget=30000' // Give extra time for complex renders
+      '--virtual-time-budget=30000'
     ],
     defaultViewport: {
       width: 1280,
       height: 800
     },
-    timeout: 60000 // Extended timeout for browser launch
+    timeout: 60000
   });
 
   let page;
-
   try {
+    // Create new page
     page = await browser.newPage();
     
-    // Set a global flag indicating Puppeteer environment BEFORE any page scripts run
-    await page.evaluateOnNewDocument(() => {
-      window.IS_PUPPETEER_EXPORT = true;
-      console.log('[Puppeteer Pre-Script] window.IS_PUPPETEER_EXPORT set to true.');
-    });
-    
     // Set longer timeout for navigation and element waiting
-    page.setDefaultTimeout(60000); // 60 seconds timeout
+    page.setDefaultTimeout(60000);
     
-    // Set a consistent viewport size
+    // Set viewport
     await page.setViewport({ 
       width: 1920, 
       height: 1080,
       deviceScaleFactor: 2
     });
 
-    // Enable request interception to ensure all resources load
-    await page.setRequestInterception(true);
-    page.on('request', request => {
-      // Log all requested URLs (optional, can be noisy)
-      // console.log(`[Puppeteer] Requesting: ${request.url()}`);
-      
-      request.continue().catch(err => console.error('[Puppeteer] Error continuing request:', err));
-      
-      if (request.failure()) {
-        console.error(`[Puppeteer] Request failed: URL: ${request.url()}, Error: ${request.failure().errorText}`);
-      }
-    });
-
-    // Log console messages from the page
-    page.on('console', msg => console.log('[Page Console]', msg.text()));
-    page.on('pageerror', err => console.error('[Page Error]', err));
-
-    console.log(`[Puppeteer] Navigating to URL: ${comicCreatorUrl}`);
-    
-    // Add initial delay before navigation
-    await page.waitForTimeout(1000);
-
-    // Set up page load handlers before navigation
+    // Important: Set up page handlers BEFORE any navigation
     await page.evaluateOnNewDocument(() => {
       window.onbeforeunload = null;
       window.IS_PUPPETEER_EXPORT = true;
       console.log('[Pre-Navigation] Set IS_PUPPETEER_EXPORT flag');
     });
 
-    // Navigate with more robust wait conditions
+    // Enable request interception
+    await page.setRequestInterception(true);
+    page.on('request', request => {
+      request.continue().catch(err => console.error('[Puppeteer] Error continuing request:', err));
+      if (request.failure()) {
+        console.error(`[Puppeteer] Request failed: URL: ${request.url()}, Error: ${request.failure().errorText}`);
+      }
+    });
+
+    // Log console messages
+    page.on('console', msg => console.log('[Page Console]', msg.text()));
+    page.on('pageerror', err => console.error('[Page Error]', err));
+
+    // Add initial delay before navigation
+    await page.waitForTimeout(2000);
+    console.log(`[Puppeteer] Starting navigation to: ${comicCreatorUrl}`);
+
+    // Navigate with robust wait conditions
     const response = await page.goto(comicCreatorUrl, { 
       waitUntil: ['networkidle0', 'domcontentloaded', 'load'],
       timeout: 60000
@@ -210,8 +199,9 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
       throw new Error(`Failed to load page: ${response.status()} ${response.statusText()}`);
     }
 
-    console.log(`[Puppeteer] Navigation complete. Adding initial delay...`);
-    await page.waitForTimeout(2000); // Add post-navigation delay
+    // Add post-navigation delay
+    console.log(`[Puppeteer] Navigation complete. Waiting for page stabilization...`);
+    await page.waitForTimeout(3000);
 
     console.log(`[Puppeteer] Waiting for comic canvas...`);
 

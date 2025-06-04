@@ -103,8 +103,42 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
   // });
   
   // Production-ready launch options for DigitalOcean App Platform
+  let executablePath;
+  
+  // Try to find Chrome executable in common DigitalOcean locations
+  if (process.env.NODE_ENV === 'production') {
+    const possiblePaths = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+      '/opt/google/chrome/chrome'
+    ];
+    
+    for (const chromePath of possiblePaths) {
+      if (chromePath && await fs.pathExists(chromePath)) {
+        executablePath = chromePath;
+        console.log(`[Puppeteer] Found Chrome at: ${chromePath}`);
+        break;
+      }
+    }
+    
+    if (!executablePath) {
+      console.log('[Puppeteer] Chrome not found, attempting to install...');
+      try {
+        const { execSync } = await import('child_process');
+        execSync('npx puppeteer browsers install chrome', { stdio: 'inherit' });
+        console.log('[Puppeteer] Chrome installation completed');
+      } catch (installError) {
+        console.error('[Puppeteer] Chrome installation failed:', installError);
+      }
+    }
+  }
+
   const browser = await puppeteer.launch({
     headless: "new", // Use the new headless mode
+    executablePath: executablePath, // Use found Chrome path in production
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -118,8 +152,6 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
       '--force-color-profile=srgb'
     ],
     // For DigitalOcean App Platform - automatically download Chrome if not found
-    downloadBaseUrl: process.env.PUPPETEER_DOWNLOAD_BASE_URL,
-    skipChromiumDownload: false,
     ignoreHTTPSErrors: true
   });
 

@@ -91,7 +91,7 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
   console.log(`[Puppeteer] Launching browser for output: ${outputPdfPath}`);
   
   // Production-ready launch options for DigitalOcean App Platform
-  // Based on official DigitalOcean tutorial: https://www.digitalocean.com/community/tutorials/build-a-puppeteer-web-scrapper-with-docker-and-app-platform
+  // Let Puppeteer use the Chrome it downloaded during install
   
   console.log('Environment details:', {
     PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -100,7 +100,7 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
 
   const browser = await puppeteer.launch({
     headless: "new", // Use the new headless mode
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+    // Don't set executablePath - let Puppeteer find the Chrome it installed
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',

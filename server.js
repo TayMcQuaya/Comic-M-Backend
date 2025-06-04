@@ -28,46 +28,49 @@ const PORT = process.env.PORT || 3001;
 
 // CORS configuration
 const corsOptions = {
-    origin: function (origin, callback) {
-        // Allow requests with no origin (mobile apps, etc.)
-        if (!origin) return callback(null, true);
-        
-        // Define allowed origins
-        const allowedOrigins = [
-            'http://localhost:5173',           // Local development
-            'http://localhost:3000',           // Alternative local port
-            'https://comic-pro.vercel.app',    // Your actual Vercel production URL
-            'https://comic-8hwgnwhan-taymcquayas-projects.vercel.app', // Your new Vercel URL
-            /\.vercel\.app$/,                  // Any Vercel deployment
-            /localhost:\d+/,                   // Any localhost port
-            'https://comic-pro.vercel.app'     // Your main Vercel URL
-        ];
-        
-        // Check if origin is allowed
-        const isAllowed = allowedOrigins.some(allowedOrigin => {
-            if (typeof allowedOrigin === 'string') {
-                return origin === allowedOrigin;
-            }
-            return allowedOrigin.test(origin);
-        });
-        
-        if (isAllowed) {
-            callback(null, true);
-        } else {
-            console.log(`[CORS] Blocked origin: ${origin}`);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
+    origin: ['https://comic-pro.vercel.app', 'http://localhost:5173', 'http://localhost:3000'],
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
 
-// Middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Additional CORS headers for all responses
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', 'https://comic-pro.vercel.app');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    next();
+});
+
+// Configure body parser with larger limits
+app.use(express.json({ 
+    limit: '150mb',
+    verify: (req, res, buf) => {
+        // Add request size logging
+        const size = buf.length / (1024 * 1024);  // Convert to MB
+        console.log(`[Server] Received request size: ${size.toFixed(2)}MB`);
+    }
+}));
+
+app.use(express.urlencoded({ 
+    extended: true, 
+    limit: '150mb'
+}));
+
+// Add memory usage monitoring
+setInterval(() => {
+    const used = process.memoryUsage();
+    console.log('[Server] Memory usage:', {
+        heapTotal: `${Math.round(used.heapTotal / 1024 / 1024)}MB`,
+        heapUsed: `${Math.round(used.heapUsed / 1024 / 1024)}MB`,
+        rss: `${Math.round(used.rss / 1024 / 1024)}MB`
+    });
+}, 60000);  // Log every minute
 
 // Request logging middleware
 app.use((req, res, next) => {

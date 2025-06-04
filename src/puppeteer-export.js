@@ -19,6 +19,56 @@ console.log('[PuppeteerExport] ILOVEPDF_SECRET_KEY exists:', !!process.env.ILOVE
 // In-memory store for export job statuses
 const exportJobs = {};
 
+// REQUEST QUEUE FOR MEMORY MANAGEMENT
+class ExportQueue {
+    constructor() {
+        this.queue = [];
+        this.processing = false;
+        this.maxConcurrent = 1; // Only 1 export at a time for 1GB memory
+    }
+
+    async add(jobFunction) {
+        return new Promise((resolve, reject) => {
+            this.queue.push({
+                execute: jobFunction,
+                resolve,
+                reject
+            });
+            this.processNext();
+        });
+    }
+
+    async processNext() {
+        if (this.processing || this.queue.length === 0) {
+            return;
+        }
+
+        this.processing = true;
+        const job = this.queue.shift();
+
+        try {
+            console.log(`[ExportQueue] Processing job. Queue length: ${this.queue.length}`);
+            const result = await job.execute();
+            job.resolve(result);
+        } catch (error) {
+            console.error('[ExportQueue] Job failed:', error);
+            job.reject(error);
+        } finally {
+            this.processing = false;
+            // Process next job if any
+            if (this.queue.length > 0) {
+                setImmediate(() => this.processNext());
+            }
+        }
+    }
+
+    getQueueLength() {
+        return this.queue.length;
+    }
+}
+
+const exportQueue = new ExportQueue();
+
 // Function to clean up old jobs (e.g., after a certain time)
 // Simple example: remove jobs older than 1 hour
 setInterval(() => {
@@ -115,6 +165,7 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
 
   console.log(`[Puppeteer] Using Chrome executable: ${chromeExecutablePath}`);
 
+  // OPTIMIZED BROWSER CONFIG FOR 1GB MEMORY
   const browser = await puppeteer.launch({
     headless: "new",
     executablePath: chromeExecutablePath,
@@ -141,13 +192,24 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
       '--no-report-upload',
       '--disable-crash-reporter',
       '--window-size=1280,800',
-      '--virtual-time-budget=30000'
+      // MEMORY OPTIMIZATION FLAGS
+      '--memory-pressure-off',
+      '--max_old_space_size=512',
+      '--disable-features=VizDisplayCompositor',
+      '--disable-threaded-scrolling',
+      '--disable-web-security',
+      '--disable-features=site-per-process',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-ipc-flooding-protection',
+      '--single-process', // CRITICAL: Run in single process to reduce memory
+      '--no-zygote'      // CRITICAL: Disable zygote process
     ],
     defaultViewport: {
       width: 1280,
       height: 800
     },
-    timeout: 60000
+    timeout: 30000, // Reduced timeout
+    protocolTimeout: 30000 // Add protocol timeout
   });
 
   let page;
@@ -625,26 +687,53 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
 
   } catch (error) {
     console.error('[Puppeteer] Error during export:', error);
+    
+    // IMPROVED ERROR HANDLING - Don't try to screenshot if page is closed
     try {
       if (page && !page.isClosed()) {
-      const errorScreenshot = await page.screenshot({ fullPage: true });
-      const errorScreenshotPath = path.join(outputDirectory, 'error-screenshot.png');
-      await fs.writeFile(errorScreenshotPath, errorScreenshot);
-      console.log(`[Puppeteer] Error screenshot saved to: ${errorScreenshotPath}`);
+        console.log('[Puppeteer] Page still open, attempting error screenshot...');
+        const errorScreenshot = await page.screenshot({ 
+          fullPage: true,
+          timeout: 5000 // Short timeout for error screenshot
+        });
+        const errorScreenshotPath = path.join(outputDirectory, 'error-screenshot.png');
+        await fs.writeFile(errorScreenshotPath, errorScreenshot);
+        console.log(`[Puppeteer] Error screenshot saved to: ${errorScreenshotPath}`);
       } else {
-        console.log('[Puppeteer] Could not save error screenshot because page was closed or undefined.');
+        console.log('[Puppeteer] Page is closed or undefined, skipping error screenshot');
       }
     } catch (screenshotError) {
-      console.error('[Puppeteer] Failed to save error screenshot:', screenshotError);
+      console.error('[Puppeteer] Failed to save error screenshot:', screenshotError.message);
     }
     throw error;
   } finally {
-    if (browser) {
-      console.log('[Puppeteer] Closing browser...');
-    await browser.close();
-      console.log('[Puppeteer] Browser closed.');
+    // IMPROVED CLEANUP
+    try {
+      if (page && !page.isClosed()) {
+        console.log('[Puppeteer] Closing page...');
+        await page.close();
+        console.log('[Puppeteer] Page closed successfully');
+      }
+    } catch (pageCloseError) {
+      console.error('[Puppeteer] Error closing page:', pageCloseError.message);
+    }
+
+    try {
+      if (browser && browser.process() && !browser.process().killed) {
+        console.log('[Puppeteer] Closing browser...');
+        await browser.close();
+        console.log('[Puppeteer] Browser closed successfully');
+      }
+    } catch (browserCloseError) {
+      console.error('[Puppeteer] Error closing browser:', browserCloseError.message);
+    }
+
+    // Force garbage collection if available
+    if (global.gc) {
+      console.log('[Puppeteer] Running garbage collection...');
+      global.gc();
+    }
   }
-}
 }
 
 async function mergePdfs(pdfFilePaths, finalOutputPath) {
@@ -683,6 +772,38 @@ export default function configurePuppeteerExport(router, comicCreatorUrl, output
 
     router.post('/export-pdf', async (req, res) => {
         console.log('[Vite Server/PuppeteerModule] Received POST request for /export-pdf');
+        
+        // CHECK MEMORY BEFORE ACCEPTING REQUEST
+        const memUsage = process.memoryUsage();
+        const memUsageMB = {
+            heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+            heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+            rss: Math.round(memUsage.rss / 1024 / 1024)
+        };
+        console.log('[Export Request] Current memory usage:', memUsageMB);
+        
+        // Reject if memory usage is too high (threshold: 800MB of 1GB)
+        if (memUsageMB.rss > 800) {
+            console.error('[Export Request] Memory usage too high, rejecting request');
+            return res.status(503).json({ 
+                error: 'Server temporarily overloaded. Please try again in a few moments.',
+                memoryUsage: memUsageMB
+            });
+        }
+
+        // CHECK QUEUE STATUS
+        const queueLength = exportQueue.getQueueLength();
+        console.log(`[Export Request] Current queue length: ${queueLength}`);
+        
+        // Reject if queue is too long (max 3 pending requests)
+        if (queueLength >= 3) {
+            console.error('[Export Request] Queue too long, rejecting request');
+            return res.status(503).json({ 
+                error: 'Server is busy processing other exports. Please try again later.',
+                queueLength: queueLength
+            });
+        }
+
         const projectState = req.body;
         const jobId = uuidv4();
         const exportTimestamp = Date.now(); // Keep for unique folder naming
@@ -697,7 +818,7 @@ export default function configurePuppeteerExport(router, comicCreatorUrl, output
         const totalPages = projectState.pages.length;
         exportJobs[jobId] = {
             id: jobId,
-            status: 'starting',
+            status: 'queued', // Changed from 'starting' to 'queued'
             currentPage: 0,
             totalPages: totalPages,
             finalPdfPath: null,
@@ -705,22 +826,27 @@ export default function configurePuppeteerExport(router, comicCreatorUrl, output
             compressionInfo: null, // Add compression statistics
             jobOutputDir: jobOutputDir, // Store for potential cleanup
             error: null,
-            lastUpdated: Date.now()
+            lastUpdated: Date.now(),
+            queuePosition: queueLength + 1
         };
 
-        console.log(`[Vite Server] Job ${jobId} created. Total pages: ${totalPages}. Output dir: ${jobOutputDir}`);
+        console.log(`[Vite Server] Job ${jobId} created. Total pages: ${totalPages}. Queue position: ${exportJobs[jobId].queuePosition}. Output dir: ${jobOutputDir}`);
+        
         // Respond to the client immediately that the job has started
         res.status(202).json({ 
             jobId: jobId,
-            message: 'PDF export process started.',
-            totalPages: totalPages 
+            message: 'PDF export process queued.',
+            totalPages: totalPages,
+            queuePosition: exportJobs[jobId].queuePosition
         });
 
-        // Perform the PDF generation asynchronously
-        (async () => {
+        // ADD TO QUEUE INSTEAD OF IMMEDIATE PROCESSING
+        exportQueue.add(async () => {
+            // Update status to processing when actually starting
+            exportJobs[jobId].status = 'processing';
+            exportJobs[jobId].lastUpdated = Date.now();
+            
             try {
-                exportJobs[jobId].status = 'processing';
-                exportJobs[jobId].lastUpdated = Date.now();
                 await fs.ensureDir(tempPdfDir);
                 console.log(`[Vite Server Job ${jobId}] Temporary directory for PDF pages: ${tempPdfDir}`);
                 

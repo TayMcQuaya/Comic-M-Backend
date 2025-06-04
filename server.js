@@ -65,11 +65,28 @@ app.use(express.urlencoded({
 // Add memory usage monitoring
 setInterval(() => {
     const used = process.memoryUsage();
-    console.log('[Server] Memory usage:', {
+    const memUsage = {
         heapTotal: `${Math.round(used.heapTotal / 1024 / 1024)}MB`,
         heapUsed: `${Math.round(used.heapUsed / 1024 / 1024)}MB`,
-        rss: `${Math.round(used.rss / 1024 / 1024)}MB`
-    });
+        rss: `${Math.round(used.rss / 1024 / 1024)}MB`,
+        external: `${Math.round(used.external / 1024 / 1024)}MB`
+    };
+    
+    // Add warning if memory usage is high
+    const rssUsageMB = Math.round(used.rss / 1024 / 1024);
+    if (rssUsageMB > 700) {
+        console.warn(`[Server] HIGH MEMORY WARNING! RSS Usage: ${rssUsageMB}MB (Limit: 800MB)`);
+    } else if (rssUsageMB > 600) {
+        console.warn(`[Server] Memory usage elevated: ${rssUsageMB}MB`);
+    } else {
+        console.log('[Server] Memory usage:', memUsage);
+    }
+    
+    // Force garbage collection if available and memory is high
+    if (global.gc && rssUsageMB > 600) {
+        console.log('[Server] Running garbage collection due to high memory usage...');
+        global.gc();
+    }
 }, 60000);  // Log every minute
 
 // Request logging middleware

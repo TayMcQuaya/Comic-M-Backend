@@ -3,11 +3,11 @@ module.exports = {
     name: 'comic-pro-pdf-service',
     script: 'server.js',
     interpreter: 'node',
-    node_args: '--experimental-modules',
+    node_args: '--experimental-modules --max-old-space-size=512 --expose-gc --optimize-for-size',
     instances: 1, // Start with 1 instance, can scale up later
     exec_mode: 'fork', // Use fork mode for better memory management
     watch: false, // Disable in production
-    max_memory_restart: '1G', // Restart if memory usage exceeds 1GB
+    max_memory_restart: '800M', // Restart if memory usage exceeds 800MB (leave 200MB buffer)
     env: {
       NODE_ENV: 'development',
       PORT: 3001

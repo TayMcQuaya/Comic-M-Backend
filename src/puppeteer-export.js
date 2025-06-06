@@ -362,9 +362,10 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
           /* Ensure text fill is preserved for webkit stroke */
           -webkit-text-fill-color: currentColor !important;
         }
-        /* Ensure text with shadow renders correctly */
+        /* Ensure text with shadow renders correctly - PRESERVE ALL SHADOW VALUES INCLUDING BLUR */
         .text-content[data-has-shadow="true"] {
-          text-shadow: var(--text-shadow-value) !important;
+          /* Explicitly ensure shadows are visible during export */
+          text-shadow: var(--export-text-shadow) !important;
         }
         /* Fallback for text that might have both outline and shadow */
         .text-content {
@@ -562,6 +563,33 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
         return cs;
     });
     console.log('[Puppeteer] Canvas Computed Styles in Puppeteer:', canvasComputedStyles);
+
+    // CRITICAL: Fix text shadows with blur and offsets for export
+    console.log('[Puppeteer] Applying text shadow fixes for export...');
+    await page.evaluate(() => {
+      // Find all text elements with shadows and ensure their effects are preserved
+      const textElements = document.querySelectorAll('.text-content[data-has-shadow="true"]');
+      console.log(`[Page] Found ${textElements.length} text elements with shadows`);
+      
+      textElements.forEach((element, index) => {
+        const shadowColor = element.getAttribute('data-shadow-color') || '#666666';
+        const shadowX = element.getAttribute('data-shadow-x') || '2';
+        const shadowY = element.getAttribute('data-shadow-y') || '2';
+        const shadowBlur = element.getAttribute('data-shadow-blur') || '2';
+        
+        // Create the complete shadow string
+        const shadowValue = `${shadowX}px ${shadowY}px ${shadowBlur}px ${shadowColor}`;
+        
+        // Set as CSS custom property for the export CSS to use
+        element.style.setProperty('--export-text-shadow', shadowValue);
+        
+        // Also set the inline style as backup
+        element.style.textShadow = shadowValue;
+        
+        console.log(`[Page] Element ${index}: Applied shadow ${shadowValue}`);
+      });
+    });
+    console.log('[Puppeteer] Text shadow fixes applied.');
 
     // Temporarily hide all elements except the comic canvas and its parents/ancestors
     await page.evaluate(() => {

@@ -987,6 +987,18 @@ export default function configurePuppeteerExport(router, comicCreatorUrl, output
         res.json(job);
     });
 
+    // Progress check endpoint (alias for export-status to match frontend expectations)
+    router.get('/export-progress/:jobId', (req, res) => {
+        const jobId = req.params.jobId;
+        const job = exportJobs[jobId];
+        
+        if (!job) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
+        
+        res.json(job);
+    });
+
     // Download endpoint
     router.get('/download/:jobId', async (req, res) => {
         const jobId = req.params.jobId;

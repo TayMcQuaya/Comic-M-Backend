@@ -351,6 +351,27 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
           padding: 0 !important;
           vertical-align: top !important;
         }
+        /* CRITICAL: Fix text outline and shadow rendering during export - PRESERVE ORIGINAL COLOR */
+        .text-content[data-has-outline="true"] {
+          -webkit-text-stroke-width: var(--stroke-width, 1px) !important;
+          -webkit-text-stroke-color: var(--stroke-color, #000000) !important;
+          /* DO NOT override color - preserve the original text color */
+          -webkit-font-smoothing: antialiased !important;
+          -moz-osx-font-smoothing: grayscale !important;
+          text-rendering: optimizeLegibility !important;
+          /* Ensure text fill is preserved for webkit stroke */
+          -webkit-text-fill-color: currentColor !important;
+        }
+        /* Ensure text with shadow renders correctly */
+        .text-content[data-has-shadow="true"] {
+          text-shadow: var(--text-shadow-value) !important;
+        }
+        /* Fallback for text that might have both outline and shadow */
+        .text-content {
+          -webkit-font-smoothing: antialiased !important;
+          -moz-osx-font-smoothing: grayscale !important;
+          text-rendering: optimizeLegibility !important;
+        }
         .canvas-sticker-image {
           transform-origin: center center !important;
           transition: none !important;
@@ -920,126 +941,78 @@ export default function configurePuppeteerExport(router, comicCreatorUrl, output
                         console.warn(`[Vite Server Job ${jobId}] PDF compression failed, but fallback to original file was successful. Path: ${compressedPdfPath}. Reason: ${compressionResult.error}`);
                     } else {
                         exportJobs[jobId].finalPdfPath = finalPdfPath;
-                        const criticalErrorMsg = `PDF compression failed critically: ${compressionResult.error}. Fallback impossible: ${!!compressionResult.fallback_impossible}, Fallback failed: ${!!compressionResult.fallback_failed}.`;
+                        const criticalErrorMsg = `PDF compression failed completely. Using uncompressed file. Compression error: ${compressionResult.error}`;
                         console.error(`[Vite Server Job ${jobId}] ${criticalErrorMsg}`);
-                        exportJobs[jobId].status = 'error';
-                        exportJobs[jobId].error = criticalErrorMsg;
+                        exportJobs[jobId].compressionInfo.error = criticalErrorMsg;
                     }
                 } else {
-                    console.log(`[Vite Server Job ${jobId}] Compression skipped by user.`);
-                    exportJobs[jobId].finalPdfPath = finalPdfPath; // Use the uncompressed path
+                    console.log(`[Vite Server Job ${jobId}] No compression requested. Using uncompressed PDF.`);
+                    exportJobs[jobId].finalPdfPath = finalPdfPath;
                     exportJobs[jobId].compressionInfo = {
-                        success: true, // Considered success as no compression was attempted
-                        skipped: true,
-                        originalSize: await fs.stat(finalPdfPath).then(stat => stat.size).catch(() => 0),
-                        compressedSize: await fs.stat(finalPdfPath).then(stat => stat.size).catch(() => 0),
-                        compressionRatio: "0.00",
-                        error: null
+                        success: true,
+                        originalSize: null,
+                        compressedSize: null,
+                        compressionRatio: null,
+                        error: null,
+                        fallback_used: false,
+                        fallback_failed: false,
+                        fallback_impossible: false,
+                        skipped: true
                     };
-                    // No change to status, will proceed to complete directly
                 }
-                
-                // Only set to complete if not already in an error state from critical compression failure
-                if (exportJobs[jobId].status !== 'error') {
-                    exportJobs[jobId].status = 'complete';
-                    console.log(`[Vite Server Job ${jobId}] PDF processing (including compression attempt) completed.`);
-                } else {
-                    console.error(`[Vite Server Job ${jobId}] Job finished with an error state due to compression issues.`);
-                }
-                exportJobs[jobId].lastUpdated = Date.now();
 
-                // Optionally clean up temporary individual PDF files after a short delay
-                setTimeout(async () => {
-                    try {
-                        if (await fs.pathExists(tempPdfDir)) {
-                            await fs.remove(tempPdfDir);
-                            console.log(`[Vite Server Job ${jobId}] Cleaned up temporary PDF pages directory ${tempPdfDir}`);
-                        }
-                    } catch (cleanupError) {
-                        console.error(`[Vite Server Job ${jobId}] Error cleaning up temporary PDF pages directory ${tempPdfDir}:`, cleanupError);
-                    }
-                }, 30000); // 30 seconds delay
+                // Mark job as complete
+                exportJobs[jobId].status = 'complete';
+                exportJobs[jobId].lastUpdated = Date.now();
+                console.log(`[Vite Server Job ${jobId}] Export process completed successfully. Final PDF: ${exportJobs[jobId].finalPdfPath}`);
 
             } catch (error) {
-                console.error(`[Vite Server Job ${jobId}] Error processing export:`, error);
+                console.error(`[Vite Server Job ${jobId}] Export process failed:`, error);
                 exportJobs[jobId].status = 'error';
-                exportJobs[jobId].error = error.message || 'Unknown export error';
+                exportJobs[jobId].error = error.message;
                 exportJobs[jobId].lastUpdated = Date.now();
-                // Cleanup jobOutputDir on error (optional, might want to keep for debugging)
-                // try {
-                //     if (await fs.pathExists(jobOutputDir)) {
-                //         await fs.remove(jobOutputDir);
-                //         console.log(`[Vite Server Job ${jobId}] Cleaned up job output directory due to error: ${jobOutputDir}`);
-                //     }
-                // } catch (cleanupError) {
-                //     console.error(`[Vite Server Job ${jobId}] Error cleaning up job output directory ${jobOutputDir} after main error:`, cleanupError);
-                // }
             }
-        }); // Pass function to queue, don't immediately invoke
+        });
     });
 
-    // New endpoint to get progress
-    router.get('/export-progress/:jobId', (req, res) => {
+    // Status check endpoint
+    router.get('/export-status/:jobId', (req, res) => {
         const jobId = req.params.jobId;
         const job = exportJobs[jobId];
+        
+        if (!job) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
+        
+        res.json(job);
+    });
 
-        if (job) {
-            res.json({
-                jobId: job.id,
-                status: job.status,
-                currentPage: job.currentPage,
-                totalPages: job.totalPages,
-                finalPdfPath: job.finalPdfPath, // Will be null until complete or point to compressed/original
-                // Ensure all relevant fields from job.compressionInfo are passed
-                compressionInfo: job.compressionInfo ? {
-                    success: job.compressionInfo.success,
-                    originalSize: job.compressionInfo.originalSize,
-                    compressedSize: job.compressionInfo.compressedSize,
-                    compressionRatio: job.compressionInfo.compressionRatio,
-                    error: job.compressionInfo.error,
-                    fallback_used: job.compressionInfo.fallback_used,
-                    fallback_failed: job.compressionInfo.fallback_failed,
-                    fallback_impossible: job.compressionInfo.fallback_impossible
-                } : null,
-                error: job.error
+    // Download endpoint
+    router.get('/download/:jobId', async (req, res) => {
+        const jobId = req.params.jobId;
+        const job = exportJobs[jobId];
+        
+        if (!job) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
+        
+        if (job.status !== 'complete' || !job.finalPdfPath) {
+            return res.status(400).json({ 
+                error: 'PDF not ready for download',
+                status: job.status 
             });
-        } else {
-            res.status(404).send('Job not found.');
+        }
+        
+        try {
+            const fileName = `comic_export_${Date.now()}.pdf`;
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+            
+            const fileStream = fs.createReadStream(job.finalPdfPath);
+            fileStream.pipe(res);
+        } catch (error) {
+            console.error(`[Download Job ${jobId}] Error serving file:`, error);
+            res.status(500).json({ error: 'Error serving file' });
         }
     });
-
-    // New endpoint to download the PDF
-    router.get('/download-pdf/:jobId', async (req, res) => {
-        const jobId = req.params.jobId;
-        const job = exportJobs[jobId];
-
-        if (job && job.status === 'complete' && job.finalPdfPath) {
-            if (await fs.pathExists(job.finalPdfPath)) {
-                res.setHeader('Content-Type', 'application/pdf');
-                const filename = path.basename(job.finalPdfPath);
-                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-                const pdfFileStream = fs.createReadStream(job.finalPdfPath);
-                
-                pdfFileStream.pipe(res);
-                pdfFileStream.on('error', (err) => {
-                    console.error(`[Vite Server Job ${jobId}] Error streaming PDF to client:`, err);
-                    if (!res.headersSent) {
-                        res.status(500).send('Error streaming PDF.');
-                    }
-                });
-                // Note: We might not clean up jobOutputDir immediately here, 
-                // as the job cleanup interval will handle it, or another mechanism.
-            } else {
-                console.error(`[Vite Server Job ${jobId}] Final PDF not found at path: ${job.finalPdfPath}`);
-                res.status(404).send('PDF file not found. It might have been cleaned up or an error occurred.');
-                 exportJobs[jobId].status = 'error'; // Mark as error if file is gone
-                 exportJobs[jobId].error = 'PDF file not found, possibly cleaned up.';
-                 exportJobs[jobId].lastUpdated = Date.now();
-            }
-        } else if (job) {
-            res.status(400).json({ message: 'Job not yet complete or has an error.', status: job.status, error: job.error });
-        } else {
-            res.status(404).send('Job not found.');
-        }
-    });
-};
+}

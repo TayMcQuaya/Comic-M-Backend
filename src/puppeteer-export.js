@@ -147,12 +147,33 @@ async function capturePageAsImage(comicCreatorUrl, outputDirectory, projectState
     PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH
   });
 
-  // Determine Chrome executable path for Ubuntu
-  const chromeExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH || 
-    '/usr/bin/google-chrome-stable' || 
-    '/usr/bin/google-chrome' || 
-    '/usr/bin/chromium' ||
-    '/usr/bin/chromium-browser';
+  // Determine Chrome executable path for both Windows and Linux
+  let chromeExecutablePath;
+  
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    chromeExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  } else if (process.platform === 'win32') {
+    // Windows Chrome paths
+    const windowsPaths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe'
+    ];
+    chromeExecutablePath = windowsPaths.find(path => {
+      try {
+        require('fs').accessSync(path);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }) || windowsPaths[0]; // Default to first path if none found
+  } else {
+    // Linux Chrome paths
+    chromeExecutablePath = '/usr/bin/google-chrome-stable' || 
+      '/usr/bin/google-chrome' || 
+      '/usr/bin/chromium' ||
+      '/usr/bin/chromium-browser';
+  }
 
   // Verify Chrome exists
   try {
@@ -954,7 +975,7 @@ export default function configurePuppeteerExport(router, comicCreatorUrl, output
                 //     console.error(`[Vite Server Job ${jobId}] Error cleaning up job output directory ${jobOutputDir} after main error:`, cleanupError);
                 // }
             }
-        })(); // Immediately invoke the async function
+        }); // Pass function to queue, don't immediately invoke
     });
 
     // New endpoint to get progress

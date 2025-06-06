@@ -1027,4 +1027,33 @@ export default function configurePuppeteerExport(router, comicCreatorUrl, output
             res.status(500).json({ error: 'Error serving file' });
         }
     });
+
+    // Download PDF endpoint (alias for download to match frontend expectations)
+    router.get('/download-pdf/:jobId', async (req, res) => {
+        const jobId = req.params.jobId;
+        const job = exportJobs[jobId];
+        
+        if (!job) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
+        
+        if (job.status !== 'complete' || !job.finalPdfPath) {
+            return res.status(400).json({ 
+                error: 'PDF not ready for download',
+                status: job.status 
+            });
+        }
+        
+        try {
+            const fileName = `comic_export_${Date.now()}.pdf`;
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+            
+            const fileStream = fs.createReadStream(job.finalPdfPath);
+            fileStream.pipe(res);
+        } catch (error) {
+            console.error(`[Download Job ${jobId}] Error serving file:`, error);
+            res.status(500).json({ error: 'Error serving file' });
+        }
+    });
 }

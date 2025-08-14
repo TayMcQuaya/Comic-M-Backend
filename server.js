@@ -44,19 +44,24 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Configure body parser with larger limits
+// Configure body parser with larger limits for bigger comics
 app.use(express.json({ 
-    limit: '150mb',
+    limit: '300mb',  // Increased from 150mb to support larger comics
     verify: (req, res, buf) => {
         // Add request size logging
         const size = buf.length / (1024 * 1024);  // Convert to MB
         console.log(`[Server] Received request size: ${size.toFixed(2)}MB`);
+        
+        // Warn if approaching limit
+        if (size > 250) {
+            console.warn(`[Server] Large request warning: ${size.toFixed(2)}MB (limit: 300MB)`);
+        }
     }
 }));
 
 app.use(express.urlencoded({ 
     extended: true, 
-    limit: '150mb'
+    limit: '300mb'  // Increased from 150mb
 }));
 
 // Add memory usage monitoring

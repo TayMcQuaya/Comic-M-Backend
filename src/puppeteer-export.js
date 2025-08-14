@@ -874,6 +874,25 @@ export default function configurePuppeteerExport(router, comicCreatorUrl, output
         }
         
         const totalPages = projectState.pages.length;
+        
+        // Estimate memory needed for this export (rough estimate: 20MB per page + 200MB base)
+        const estimatedMemoryMB = (totalPages * 20) + 200;
+        console.log(`[Export Request] Estimated memory needed: ${estimatedMemoryMB}MB for ${totalPages} pages`);
+        
+        // Check if we have enough memory headroom
+        const currentMemory = memUsageMB.rss;
+        const memoryAfterExport = currentMemory + estimatedMemoryMB;
+        
+        if (memoryAfterExport > 900) {
+            console.error(`[Export Request] Export would exceed memory limits. Current: ${currentMemory}MB, Estimated need: ${estimatedMemoryMB}MB, Total: ${memoryAfterExport}MB`);
+            return res.status(503).json({
+                error: 'Export too large for server memory. Please use client-side export or reduce comic size.',
+                estimatedMemory: estimatedMemoryMB,
+                currentMemory: currentMemory,
+                totalPages: totalPages,
+                suggestion: totalPages > 30 ? 'Try exporting in smaller sections' : 'Try client-side export'
+            });
+        }
         exportJobs[jobId] = {
             id: jobId,
             status: 'queued', // Changed from 'starting' to 'queued'
@@ -910,18 +929,48 @@ export default function configurePuppeteerExport(router, comicCreatorUrl, output
                 
                 const individualPdfPaths = [];
 
-                for (let i = 0; i < totalPages; i++) {
-                    exportJobs[jobId].currentPage = i + 1;
-                    exportJobs[jobId].lastUpdated = Date.now();
-                    console.log(`[Vite Server Job ${jobId}] Processing page ${i + 1} of ${totalPages}...`);
+                // Process pages in batches to manage memory
+                const BATCH_SIZE = 5;
+                const batches = [];
+                
+                for (let i = 0; i < totalPages; i += BATCH_SIZE) {
+                    batches.push({
+                        start: i,
+                        end: Math.min(i + BATCH_SIZE, totalPages)
+                    });
+                }
+                
+                console.log(`[Vite Server Job ${jobId}] Processing ${totalPages} pages in ${batches.length} batches of ${BATCH_SIZE}`);
+                
+                for (const batch of batches) {
+                    console.log(`[Vite Server Job ${jobId}] Processing batch: pages ${batch.start + 1} to ${batch.end}`);
                     
-                    const singlePageProjectState = createSinglePageProjectState(projectState, i);
-                    const tempPdfPath = path.join(tempPdfDir, `page_${i + 1}.pdf`);
+                    // Process batch
+                    for (let i = batch.start; i < batch.end; i++) {
+                        exportJobs[jobId].currentPage = i + 1;
+                        exportJobs[jobId].lastUpdated = Date.now();
+                        console.log(`[Vite Server Job ${jobId}] Processing page ${i + 1} of ${totalPages}...`);
+                        
+                        const singlePageProjectState = createSinglePageProjectState(projectState, i);
+                        const tempPdfPath = path.join(tempPdfDir, `page_${i + 1}.pdf`);
 
-                    console.log(`[Vite Server Job ${jobId}] Calling capturePageAsImage for page ${i + 1}... Output: ${tempPdfPath}`);
-                    await capturePageAsImage(comicCreatorUrl, jobOutputDir, singlePageProjectState, tempPdfPath);
-                    individualPdfPaths.push(tempPdfPath);
-                    console.log(`[Vite Server Job ${jobId}] Successfully captured page ${i + 1} to ${tempPdfPath}`);
+                        console.log(`[Vite Server Job ${jobId}] Calling capturePageAsImage for page ${i + 1}... Output: ${tempPdfPath}`);
+                        await capturePageAsImage(comicCreatorUrl, jobOutputDir, singlePageProjectState, tempPdfPath);
+                        individualPdfPaths.push(tempPdfPath);
+                        console.log(`[Vite Server Job ${jobId}] Successfully captured page ${i + 1} to ${tempPdfPath}`);
+                    }
+                    
+                    // Force garbage collection between batches if available
+                    if (global.gc) {
+                        console.log(`[Vite Server Job ${jobId}] Running garbage collection after batch`);
+                        global.gc();
+                    }
+                    
+                    // Small delay between batches to allow memory cleanup
+                    if (batch.end < totalPages) {
+                        console.log(`[Vite Server Job ${jobId}] Pausing 1 second before next batch`);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
                 }
 
                 console.log(`[Vite Server Job ${jobId}] All pages processed. Starting PDF merge...`);

@@ -875,15 +875,16 @@ export default function configurePuppeteerExport(router, comicCreatorUrl, output
         
         const totalPages = projectState.pages.length;
         
-        // Estimate memory needed for this export (rough estimate: 20MB per page + 200MB base)
-        const estimatedMemoryMB = (totalPages * 20) + 200;
+        // Estimate memory needed for this export (adjusted for 1GB droplet: 10MB per page + 100MB base)
+        const estimatedMemoryMB = (totalPages * 10) + 100;
         console.log(`[Export Request] Estimated memory needed: ${estimatedMemoryMB}MB for ${totalPages} pages`);
         
         // Check if we have enough memory headroom
         const currentMemory = memUsageMB.rss;
         const memoryAfterExport = currentMemory + estimatedMemoryMB;
         
-        if (memoryAfterExport > 900) {
+        // Adjusted threshold for 1GB droplet (was 900, now 750 to leave headroom)
+        if (memoryAfterExport > 750) {
             console.error(`[Export Request] Export would exceed memory limits. Current: ${currentMemory}MB, Estimated need: ${estimatedMemoryMB}MB, Total: ${memoryAfterExport}MB`);
             return res.status(503).json({
                 error: 'Export too large for server memory. Please use client-side export or reduce comic size.',
